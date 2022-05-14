@@ -1,26 +1,36 @@
-extern crate reqwest;
-extern crate scraper;
-
-// importation syntax
+use comfy_table::presets::UTF8_FULL;
+use comfy_table::Table;
+use reqwest;
 use scraper::{Html, Selector};
 
-fn main() {
-    let html = r#"
-        <ul>
-            <li><a href='/url/foo'>Foo</a></li>
-            <li>Bar</li>
-            <li><a href="/url/baz"><span>Baz</span></a></li>
-        </ul>
-    "#;
+#[tokio::main]
+async fn main() {
+    let args: Vec<String> = std::env::args().collect();
 
-    let fragment = Html::parse_fragment(html);
+    if args.len() < 2 {
+        println!("Usage: {} <url>", args[0]);
+        return;
+    }
+
+    let res = reqwest::get(&args[1]).await.unwrap().text().await;
+    let doc = Html::parse_document(&res.unwrap().to_string());
 
     let sel = Selector::parse("a").unwrap();
-    let links: Vec<String> = fragment
+    let mut links: Vec<String> = doc
         .select(&sel)
         .filter_map(|a| a.value().attr("href"))
         .map(|href| String::from(href))
         .collect();
 
-    println!("{:?}", links);
+    links.dedup();
+
+    let mut table = Table::new();
+
+    table.load_preset(UTF8_FULL).set_header(vec!["URL"]);
+
+    links.iter().for_each(|link| {
+        table.add_row(vec![link.to_string()]);
+    });
+
+    println!("{table}")
 }
