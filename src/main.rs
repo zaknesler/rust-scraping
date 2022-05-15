@@ -1,7 +1,11 @@
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::Table;
-use reqwest;
 use scraper::{Html, Selector};
+
+struct Entry {
+    name: String,
+    url: String,
+}
 
 #[tokio::main]
 async fn main() {
@@ -13,23 +17,23 @@ async fn main() {
     }
 
     let res = reqwest::get(&args[1]).await.unwrap().text().await;
-    let doc = Html::parse_document(&res.unwrap().to_string());
+    let doc = Html::parse_document(&res.unwrap());
 
     let sel = Selector::parse("a").unwrap();
-    let mut links: Vec<String> = doc
+    let entries: Vec<Entry> = doc
         .select(&sel)
-        .filter_map(|a| a.value().attr("href"))
-        .map(|href| String::from(href))
+        .filter(|a| a.value().attr("href").is_some())
+        .map(|a| {
+            let name = a.text().collect::<Vec<_>>().join(" ");
+            let url = a.value().attr("href").unwrap().to_string();
+            Entry { name, url }
+        })
         .collect();
 
-    links.dedup();
-
     let mut table = Table::new();
-
-    table.load_preset(UTF8_FULL).set_header(vec!["URL"]);
-
-    links.iter().for_each(|link| {
-        table.add_row(vec![link.to_string()]);
+    table.load_preset(UTF8_FULL).set_header(vec!["Name", "URL"]);
+    entries.iter().for_each(|entry| {
+        table.add_row(vec![&entry.name, &entry.url]);
     });
 
     println!("{table}")
